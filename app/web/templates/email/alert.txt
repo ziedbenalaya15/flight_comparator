@@ -1,0 +1,26 @@
+{% if confidence == 'CONFIRME_LIVE' %}ERROR FARE PROBABLE (confirmée live){% else %}PRIX BAS DÉTECTÉ (cache, non confirmé){% endif %}
+
+{{ route.origin }} -> {{ route.destination }} : {{ "%.0f"|format(anomaly.price) }} {{ anomaly.currency }}
+{%- if pct is not none %} (-{{ "%.0f"|format(pct) }} % vs médiane 30 j){% endif %}
+
+Critères     : {{ types_labels|join(", ") }}
+Dates        : {{ anomaly.depart_date or "?" }} -> {{ anomaly.return_date or "?" }}
+Cabine       : économique
+Escales      : {% if anomaly.transfers is not none %}{{ anomaly.transfers }} aller{% else %}n/c{% endif %}{% if anomaly.return_transfers is not none %}, {{ anomaly.return_transfers }} retour{% endif %}
+{%- if anomaly.airline %}
+Compagnie    : {{ anomaly.airline }}
+{%- endif %}
+Médiane 30 j : {% if anomaly.median_30d %}{{ "%.0f"|format(anomaly.median_30d) }} {{ anomaly.currency }} ({{ anomaly.baseline_samples }} relevés){% else %}indisponible{% endif %}
+{%- if anomaly.previous_min %}
+Réf. battue  : {{ "%.0f"|format(anomaly.previous_min) }} {{ anomaly.currency }}
+{%- endif %}
+Confiance    : {{ confidence_label }}
+Source       : Travelpayouts{% if freshness_min is not none %} (relevé il y a {{ freshness_min }} min){% endif %}
+
+Vérifier :
+- Google Flights : {{ links.google_flights }}
+{%- if links.aviasales %}
+- Aviasales      : {{ links.aviasales }}
+{%- endif %}
+
+Les error fares durent souvent 1 à 6 h : vérifie et réserve vite.

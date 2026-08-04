@@ -168,9 +168,22 @@ async def run_collection(trigger: str = "scheduled") -> dict:
                     total += len(snapshots)
                 await session.commit()
 
+                # Détection étage 1 + alertes : ne doit jamais faire échouer la collecte
+                alert_summary: dict = {}
+                try:
+                    from app.services.alerts import process_anomalies
+                    from app.services.detector import detect_anomalies
+
+                    anomalies = await detect_anomalies(session, config, started_at)
+                    if anomalies:
+                        alert_summary = await process_anomalies(session, anomalies, config)
+                except Exception:
+                    logger.exception("Échec de la détection/alertes (collecte préservée)")
+
             collection_state.last_status = "ok"
             collection_state.last_detail = (
                 f"{total} relevés sur {len(routes)} routes x {len(config.currencies)} devises x {len(months)} mois"
+                + (f" — alertes : {alert_summary}" if alert_summary else "")
             )
             collection_state.last_snapshot_count = total
             logger.info(

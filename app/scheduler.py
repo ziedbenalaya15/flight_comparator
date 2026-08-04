@@ -1,6 +1,7 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.config import get_settings
+from app.services.baseline import recalc_all_baselines
 from app.services.collector import run_collection
 
 
@@ -12,6 +13,16 @@ def build_scheduler() -> AsyncIOScheduler:
         minutes=get_settings().collect_interval_minutes,
         id="collect_travelpayouts",
         kwargs={"trigger": "scheduled"},
+        coalesce=True,
+        max_instances=1,
+    )
+    # La détection recalcule déjà les baselines des routes collectées ; ce job
+    # dédié rattrape le reste (routes en pause, redémarrages).
+    scheduler.add_job(
+        recalc_all_baselines,
+        "interval",
+        hours=6,
+        id="recalc_baselines",
         coalesce=True,
         max_instances=1,
     )

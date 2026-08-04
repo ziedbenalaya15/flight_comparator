@@ -9,7 +9,7 @@ Surveillance de prix de vols orientée **détection d'erreurs de prix (error far
 ## État d'avancement
 
 - ✅ **Phase 1** : squelette FastAPI + PostgreSQL + collecte Travelpayouts + stockage snapshots + dashboard minimal + bouton « Vérifier maintenant »
-- ⬜ Phase 2 : baselines + détection étage 1 + alertes email
+- ✅ **Phase 2** : baselines (médiane 30j, p10, p25, stddev) + détection étage 1 (seuil, record, chute) + alertes email Gmail avec dédup Redis 72h et cooldown 2h + template HTML/texte
 - ⬜ Phase 3 : page Config complète + API REST
 - ⬜ Phase 4 : module Duffel (confirmation live, cabines avant, circuit breaker)
 - ⬜ Phase 5 : cross-devise, digest quotidien, Prometheus, export CSV, tests
@@ -55,3 +55,15 @@ uvicorn app.main:app --reload
 ## Configuration de la surveillance
 
 La config active vit dans la table `config` (JSON versionné, une ligne active). Une config par défaut est créée au premier démarrage (PAR → ICN/BKK/JFK, EUR, départ le mois prochain). La page d'admin complète arrive en Phase 3 ; en attendant, on peut modifier le JSON directement en base.
+
+Champs de détection dans la config JSON : `threshold_pct` (défaut 40 — % sous la médiane 30j), `send_cache_only_alerts` (envoyer les alertes 📉 non confirmées live), `alert_email_to` (défaut : variable `ALERT_EMAIL_TO`).
+
+## Détection & anti-spam
+
+À chaque collecte, le meilleur prix de chaque route+devise est comparé à la baseline (calculée **hors** collecte courante) :
+
+- **seuil** : prix sous `threshold_pct` % de la médiane glissante 30 jours
+- **record** : nouveau minimum absolu sur la route+devise
+- **chute** : baisse > 50 % vs le relevé précédent de moins de 6 h
+
+Garde-fous : pas d'alerte seuil/record avant `MIN_BASELINE_SAMPLES` relevés (30) et 24 h d'historique. Anti-spam : dédup Redis 72 h sur (route + prix arrondi + type), cooldown 2 h par route contourné si le nouveau prix est plus bas, fail-open si Redis est indisponible. Toutes les alertes sont journalisées dans la table `alerts` (statut email visible sur le dashboard), y compris quand l'email est désactivé ou échoue.

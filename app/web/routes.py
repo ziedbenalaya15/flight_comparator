@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import COOKIE_NAME, extract_token, require_admin
 from app.config import get_settings
 from app.db import get_session
-from app.models import PriceSnapshot, Route
+from app.models import Alert, PriceSnapshot, Route
 from app.services.config_service import get_active_config
 from app.state import collection_state
 
@@ -65,12 +65,22 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
 
     total_snapshots = await session.scalar(select(func.count(PriceSnapshot.id)))
 
+    recent_alerts = (
+        await session.execute(
+            select(Alert, Route)
+            .join(Route, Alert.route_id == Route.id)
+            .order_by(Alert.created_at.desc())
+            .limit(10)
+        )
+    ).all()
+
     response = templates.TemplateResponse(
         request,
         "dashboard.html",
         {
             "config": config,
             "routes_view": routes_view,
+            "recent_alerts": recent_alerts,
             "total_snapshots": total_snapshots,
             "job": collection_state,
             "now": datetime.now(timezone.utc),

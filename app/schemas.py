@@ -18,6 +18,11 @@ class WatchConfig(BaseModel):
     return_window: DateWindow | None = None
     paused: bool = False
 
+    # Détection & alertes
+    threshold_pct: float = 40.0  # % sous la médiane 30j pour lever une anomalie "seuil"
+    alert_email_to: str | None = None  # défaut : ALERT_EMAIL_TO de l'environnement
+    send_cache_only_alerts: bool = True  # envoyer les alertes non confirmées live (📉)
+
     @field_validator("origins", "destinations")
     @classmethod
     def _upper_iata(cls, v: list[str]) -> list[str]:

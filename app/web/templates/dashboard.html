@@ -38,6 +38,33 @@
   {% endif %}
 </div>
 
+{% if recent_alerts %}
+<h2>Alertes récentes</h2>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Date</th><th>Route</th><th>Type</th><th>Prix</th><th>Confiance</th><th>Email</th></tr>
+    </thead>
+    <tbody>
+      {% for alert, route in recent_alerts %}
+      <tr>
+        <td class="muted">{{ alert.created_at.strftime("%d/%m %H:%M") }}</td>
+        <td>{{ route.origin }} → {{ route.destination }}</td>
+        <td>{{ alert.type }}</td>
+        <td class="price">{{ "%.0f"|format(alert.price) }} {{ alert.currency }}</td>
+        <td>{% if alert.confidence == "CONFIRME_LIVE" %}🔥 live{% else %}📉 cache{% endif %}</td>
+        <td>
+          {% if alert.email_status == "sent" %}<span class="badge ok">envoyé</span>
+          {% elif alert.email_status == "failed" %}<span class="badge error">échec</span>
+          {% else %}<span class="badge">{{ alert.email_status }}</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <h2>Meilleurs prix par route (dernières 24 h, top {{ 3 }})</h2>
 {% if not routes_view %}
   <p class="muted">Aucun relevé sur les dernières 24 h. Lance une collecte avec « Vérifier maintenant ».</p>
