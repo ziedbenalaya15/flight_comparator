@@ -64,6 +64,20 @@ async def _set_paused(session: AsyncSession, paused: bool) -> dict:
     return {"status": "saved", "paused": paused}
 
 
+@router.post("/api/premium", dependencies=[Depends(require_admin)])
+async def premium(session: AsyncSession = Depends(get_session)) -> dict:
+    """Interrogation Duffel à la demande pour les cabines avant (équivalent /premium)."""
+    from app.services.duffel import duffel_enabled
+    from app.services.premium import premium_check
+
+    if not duffel_enabled():
+        return {"status": "disabled", "detail": "DUFFEL_TOKEN non configuré", "results": []}
+    config = await get_active_config(session)
+    if config is None:
+        raise HTTPException(status_code=404, detail="aucune configuration active")
+    return await premium_check(session, config)
+
+
 @router.get("/api/status", dependencies=[Depends(require_admin)])
 async def status() -> dict:
     return {

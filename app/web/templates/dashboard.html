@@ -28,7 +28,10 @@
         {% endif %}
       </div>
     </div>
-    <button id="check-btn" onclick="checkNow()">🔄 Vérifier maintenant</button>
+    <div style="display:flex; gap:.5rem;">
+      <button id="check-btn" onclick="checkNow()">🔄 Vérifier maintenant</button>
+      <button id="premium-btn" onclick="premiumCheck()" style="background:#7c3aed;">💺 Prix cabines avant</button>
+    </div>
   </div>
   {% if config %}
   <div class="muted" style="margin-top:.75rem;">
@@ -40,6 +43,8 @@
   </div>
   {% endif %}
 </div>
+
+<div id="premium-results"></div>
 
 {% if recent_alerts %}
 <h2>Alertes récentes</h2>
@@ -112,6 +117,44 @@ async function checkNow() {
   }
   // La collecte tourne en fond : on recharge après un délai pour voir les résultats.
   setTimeout(() => window.location.reload(), 8000);
+}
+
+async function premiumCheck() {
+  const btn = document.getElementById("premium-btn");
+  const container = document.getElementById("premium-results");
+  btn.disabled = true;
+  btn.textContent = "Interrogation Duffel…";
+  try {
+    const res = await fetch("/api/premium", { method: "POST" });
+    const body = await res.json();
+    let html = "<h2>Prix cabines avant (Duffel, live)</h2>";
+    if (body.status !== "ok") {
+      html += `<div class="card muted">${body.detail || body.status}</div>`;
+    } else if (!body.results.length) {
+      html += '<div class="card muted">Aucun résultat.</div>';
+    } else {
+      for (const r of body.results) {
+        html += `<div class="card"><strong>${r.origin} → ${r.destination}</strong> · ${r.cabin_label}`
+             + ` <span class="muted">(${r.depart_date}${r.return_date ? " → " + r.return_date : ""})</span>`;
+        if (r.status !== "ok") {
+          html += `<div class="muted">Indisponible : ${r.detail}</div></div>`;
+          continue;
+        }
+        if (!r.offers.length) { html += '<div class="muted">Aucune offre.</div></div>'; continue; }
+        html += '<table><thead><tr><th>Prix</th><th>Compagnie</th><th>Segments</th></tr></thead><tbody>';
+        for (const o of r.offers) {
+          html += `<tr><td class="price">${Math.round(o.price)} ${o.currency}${o.over_budget ? " ⚠️" : ""}</td>`
+               + `<td>${o.airline || "—"}</td><td>${o.segments_out} aller / ${o.segments_back} retour</td></tr>`;
+        }
+        html += "</tbody></table></div>";
+      }
+    }
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = '<div class="card">Erreur réseau pendant l\'interrogation Duffel.</div>';
+  }
+  btn.disabled = false;
+  btn.textContent = "💺 Prix cabines avant";
 }
 </script>
 {% endblock %}

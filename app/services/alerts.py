@@ -19,6 +19,7 @@ from app.models import Alert
 from app.redis_client import get_redis
 from app.schemas import WatchConfig
 from app.services.detector import Anomaly
+from app.services.duffel import DuffelUnavailable, confirm_anomaly_live, duffel_enabled
 from app.services.mailer import send_email, smtp_configured
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ def _links(anomaly: Anomaly) -> dict:
     }
 
 
-def build_email(anomaly: Anomaly, confidence: str) -> tuple[str, str, str]:
+def build_email(anomaly: Anomaly, confidence: str, live_price: float | None = None) -> tuple[str, str, str]:
     """Retourne (sujet, html, texte)."""
     r = anomaly.route
     pct = anomaly.pct_below_median
@@ -110,6 +111,7 @@ def build_email(anomaly: Anomaly, confidence: str) -> tuple[str, str, str]:
         "types_labels": [TYPE_LABELS.get(t, t) for t in anomaly.types],
         "links": _links(anomaly),
         "freshness_min": freshness_min,
+        "live_price": live_price,
     }
     html = _email_env.get_template("alert.html").render(**context)
     text = _email_env.get_template("alert.txt").render(**context)
@@ -128,7 +130,26 @@ async def process_anomalies(
             summary["deduped"] += 1
             continue
 
-        confidence = CONFIDENCE_CACHE  # la confirmation live Duffel arrive en Phase 4
+        # Étage 2 : confirmation live Duffel (jamais bloquante pour le pipeline)
+        confidence = CONFIDENCE_CACHE
+        live_price: float | None = None
+        if duffel_enabled():
+            try:
+                confirmed, live_price = await confirm_anomaly_live(
+                    anomaly.route.origin,
+                    anomaly.route.destination,
+                    anomaly.depart_date,
+                    anomaly.return_date,
+                    anomaly.price,
+                )
+                if confirmed:
+                    confidence = CONFIDENCE_LIVE
+            except DuffelUnavailable as exc:
+                logger.warning(
+                    "Confirmation live indisponible",
+                    extra={"extra_fields": {"reason": str(exc)}},
+                )
+
         now = datetime.now(timezone.utc)
         alert = Alert(
             route_id=anomaly.route.id,
@@ -151,7 +172,7 @@ async def process_anomalies(
             logger.warning("SMTP non configuré, alerte journalisée sans email")
         else:
             to = config.alert_email_to or settings.alert_email_to
-            subject, html, text = build_email(anomaly, confidence)
+            subject, html, text = build_email(anomaly, confidence, live_price)
             try:
                 await send_email(to, subject, html, text)
                 alert.email_status = "sent"

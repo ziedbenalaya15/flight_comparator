@@ -14,6 +14,9 @@ Médiane 30 j : {% if anomaly.median_30d %}{{ "%.0f"|format(anomaly.median_30d) 
 {%- if anomaly.previous_min %}
 Réf. battue  : {{ "%.0f"|format(anomaly.previous_min) }} {{ anomaly.currency }}
 {%- endif %}
+{%- if live_price is not none %}
+Prix live    : {{ "%.0f"|format(live_price) }} {{ anomaly.currency }} (Duffel)
+{%- endif %}
 Confiance    : {{ confidence_label }}
 Source       : Travelpayouts{% if freshness_min is not none %} (relevé il y a {{ freshness_min }} min){% endif %}
 
