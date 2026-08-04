@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     min_baseline_age_hours: int = 24  # ancienneté minimum de l'historique avant d'alerter
     drop_window_hours: int = 6  # fenêtre de comparaison pour la chute brutale
     drop_pct: float = 50.0  # % de baisse vs relevé précédent pour lever "chute"
+    cross_currency_pct: float = 25.0  # % d'écart converti vs devise principale pour "cross_devise"
 
     # Anti-spam
     dedup_ttl_hours: int = 72

@@ -1,8 +1,14 @@
 import asyncio
+import csv
+import io
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import text
+from fastapi.responses import Response
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Alert, PriceSnapshot, Route
 
 from app.auth import require_admin
 from app.db import get_session
@@ -76,6 +82,71 @@ async def premium(session: AsyncSession = Depends(get_session)) -> dict:
     if config is None:
         raise HTTPException(status_code=404, detail="aucune configuration active")
     return await premium_check(session, config)
+
+
+@router.get("/api/export", dependencies=[Depends(require_admin)])
+async def export_csv(
+    dataset: str = "snapshots",
+    days: int = 30,
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Export CSV de l'historique (`dataset=snapshots` ou `dataset=alerts`)."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+
+    if dataset == "snapshots":
+        writer.writerow(
+            ["fetched_at", "origin", "destination", "currency", "price", "source",
+             "cabin", "transfers", "return_transfers", "airline", "depart_date", "return_date"]
+        )
+        rows = await session.stream(
+            select(PriceSnapshot, Route)
+            .join(Route, PriceSnapshot.route_id == Route.id)
+            .where(PriceSnapshot.fetched_at >= since)
+            .order_by(PriceSnapshot.fetched_at)
+        )
+        async for snapshot, route in rows:
+            writer.writerow(
+                [snapshot.fetched_at.isoformat(), route.origin, route.destination,
+                 snapshot.currency, snapshot.price, snapshot.source, snapshot.cabin,
+                 snapshot.transfers, snapshot.return_transfers, snapshot.airline,
+                 snapshot.depart_date, snapshot.return_date]
+            )
+    elif dataset == "alerts":
+        writer.writerow(
+            ["created_at", "origin", "destination", "type", "currency", "price",
+             "confidence", "email_status", "sent_at"]
+        )
+        rows = await session.stream(
+            select(Alert, Route)
+            .join(Route, Alert.route_id == Route.id)
+            .where(Alert.created_at >= since)
+            .order_by(Alert.created_at)
+        )
+        async for alert, route in rows:
+            writer.writerow(
+                [alert.created_at.isoformat(), route.origin, route.destination,
+                 alert.type, alert.currency, alert.price, alert.confidence,
+                 alert.email_status, alert.sent_at.isoformat() if alert.sent_at else ""]
+            )
+    else:
+        raise HTTPException(status_code=400, detail="dataset doit être 'snapshots' ou 'alerts'")
+
+    filename = f"{dataset}_{datetime.now(timezone.utc):%Y%m%d}.csv"
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/api/digest/send", dependencies=[Depends(require_admin)])
+async def trigger_digest() -> dict:
+    """Déclenche l'envoi du digest immédiatement (test/manuel)."""
+    from app.services.digest import send_daily_digest
+
+    return await send_daily_digest()
 
 
 @router.get("/api/status", dependencies=[Depends(require_admin)])

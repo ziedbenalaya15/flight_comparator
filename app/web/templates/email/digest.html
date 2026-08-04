@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fr">
+<body style="margin:0; padding:24px; background:#f4f5f7; font-family:-apple-system,Segoe UI,Roboto,sans-serif; color:#1a1d23;">
+  <div style="max-width:560px; margin:0 auto; background:#ffffff; border-radius:12px; overflow:hidden; border:1px solid #e2e5ea;">
+    <div style="padding:20px 24px; background:#111827; color:#ffffff;">
+      <div style="font-size:13px; opacity:.85;">🗞️ Digest quotidien</div>
+      <div style="font-size:22px; font-weight:700; margin-top:4px;">Meilleurs prix des 24 dernières heures</div>
+      <div style="font-size:13px; opacity:.85;">{{ date_label }} · devise {{ main_currency }}</div>
+    </div>
+
+    {% if not by_destination %}
+    <p style="padding:20px 24px; color:#6b7280;">Aucun relevé sur les dernières 24 heures.</p>
+    {% endif %}
+
+    {% for destination, offers in by_destination.items() %}
+    <div style="padding:16px 24px 4px; font-size:16px; font-weight:700;">→ {{ destination }}</div>
+    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+      {% for o in offers %}
+      <tr style="border-bottom:1px solid #f0f1f3;">
+        <td style="padding:8px 24px; font-weight:600; white-space:nowrap;">
+          {{ "%.0f"|format(o.price) }} {{ o.currency }}{% if o.over_budget %} ⚠️{% endif %}
+        </td>
+        <td style="padding:8px 12px; color:#6b7280;">depuis {{ o.origin }}</td>
+        <td style="padding:8px 12px; color:#6b7280;">{{ o.depart_date or "?" }} → {{ o.return_date or "?" }}</td>
+        <td style="padding:8px 24px; color:#6b7280;">{{ o.airline or "" }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% endfor %}
+
+    <p style="padding:16px 24px; color:#9ca3af; font-size:12px;">
+      Prix aller-retour par personne, source Travelpayouts (cache). ⚠️ = au-dessus du budget repère.
+    </p>
+  </div>
+</body>
+</html>

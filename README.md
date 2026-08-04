@@ -10,9 +10,9 @@ Surveillance de prix de vols orientée **détection d'erreurs de prix (error far
 
 - ✅ **Phase 1** : squelette FastAPI + PostgreSQL + collecte Travelpayouts + stockage snapshots + dashboard minimal + bouton « Vérifier maintenant »
 - ✅ **Phase 2** : baselines (médiane 30j, p10, p25, stddev) + détection étage 1 (seuil, record, chute) + alertes email Gmail avec dédup Redis 72h et cooldown 2h + template HTML/texte
-- ⬜ Phase 3 : page Config complète + API REST
-- ⬜ Phase 4 : module Duffel (confirmation live, cabines avant, circuit breaker)
-- ⬜ Phase 5 : cross-devise, digest quotidien, Prometheus, export CSV, tests
+- ✅ **Phase 3** : page Config complète (8 critères, zone de départ par pays, budgets par cabine) + API REST (`/api/config`, pause/reprise)
+- ✅ **Phase 4** : module Duffel isolé — confirmation live des anomalies (🔥 `CONFIRME_LIVE`), bouton « Prix cabines avant » (`/api/premium`), circuit breaker
+- ✅ **Phase 5** : critère cross-devise (taux ECB frankfurter.app), digest quotidien 8h, métriques Prometheus `/metrics`, export CSV, tests pytest
 
 ## Setup local
 
@@ -25,9 +25,22 @@ docker compose up --build
 Puis ouvrir <http://localhost:8000/> et entrer le `ADMIN_TOKEN`.
 Les migrations Alembic sont appliquées automatiquement au démarrage (`start.sh`).
 
-- Dashboard : `GET /` (token en query param `?token=...`, en header `X-Admin-Token` ou cookie)
-- Healthcheck : `GET /health`
+- Dashboard : `GET /` — Config : `GET /config` (token en query param `?token=...`, en header `X-Admin-Token` ou cookie)
+- Healthcheck : `GET /health` — Métriques Prometheus : `GET /metrics`
 - Collecte immédiate : `POST /api/check` — état : `GET /api/status`
+- Config : `GET|PUT /api/config`, `POST /api/config/pause|resume`
+- Cabines avant (Duffel) : `POST /api/premium`
+- Export CSV : `GET /api/export?dataset=snapshots|alerts&days=30`
+- Digest manuel : `POST /api/digest/send`
+
+### Tests
+
+```bash
+docker compose up -d
+docker compose exec app pytest
+```
+
+Les tests unitaires (schémas, rendu email, conversion FX) sont autonomes ; les tests d'intégration (détection, dédup, API config) utilisent le Postgres et le Redis du compose.
 
 ### Sans Docker
 

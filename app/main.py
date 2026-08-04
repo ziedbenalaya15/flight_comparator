@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from datetime import date
 
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.routes import router as api_router
 from app.db import SessionFactory, engine
@@ -30,5 +31,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Flight Error Fare Watcher", lifespan=lifespan)
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 app.include_router(api_router)
 app.include_router(web_router)

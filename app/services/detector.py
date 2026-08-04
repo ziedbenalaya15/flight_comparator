@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.metrics import ANOMALIES_DETECTED
 from app.models import PriceSnapshot, Route
 from app.schemas import WatchConfig
 from app.services.baseline import compute_baseline, store_baseline
@@ -22,7 +23,7 @@ from app.services.baseline import compute_baseline, store_baseline
 logger = logging.getLogger(__name__)
 
 # Ordre = priorité du type principal de l'alerte
-CRITERIA_PRIORITY = ["seuil", "record", "chute"]
+CRITERIA_PRIORITY = ["seuil", "cross_devise", "record", "chute"]
 
 
 @dataclass
@@ -118,12 +119,14 @@ async def detect_anomalies(
         if key not in best or float(snapshot.price) < float(best[key][0].price):
             best[key] = (snapshot, route)
 
-    anomalies: list[Anomaly] = []
+    anomalies_by_key: dict[tuple[int, str], Anomaly] = {}
+    stats_map: dict[tuple[int, str], object] = {}
     for (route_id, currency), (snapshot, route) in best.items():
         price = float(snapshot.price)
 
         stats = await compute_baseline(session, route_id, currency, before=run_started_at)
         await store_baseline(session, route_id, currency, stats)
+        stats_map[(route_id, currency)] = stats
 
         baseline_ready = (
             stats.samples >= settings.min_baseline_samples
@@ -162,7 +165,7 @@ async def detect_anomalies(
         if not types:
             continue
 
-        anomalies.append(
+        anomalies_by_key[(route_id, currency)] = (
             Anomaly(
                 route=route,
                 currency=currency,
@@ -194,5 +197,80 @@ async def detect_anomalies(
             },
         )
 
+    # Critère cross-devise : même route nettement moins chère dans une devise
+    # secondaire que dans la devise principale (tarif erroné sur un point de vente)
+    if len(config.currencies) > 1:
+        try:
+            await _cross_currency_pass(config, best, stats_map, anomalies_by_key)
+        except Exception:
+            logger.warning("Critère cross-devise ignoré (taux indisponibles)", exc_info=True)
+
     await session.commit()  # persiste les baselines mises à jour
+    anomalies = list(anomalies_by_key.values())
+    for anomaly in anomalies:
+        ANOMALIES_DETECTED.labels(type=anomaly.primary_type).inc()
     return anomalies
+
+
+async def _cross_currency_pass(
+    config: WatchConfig,
+    best: dict[tuple[int, str], tuple[PriceSnapshot, Route]],
+    stats_map: dict[tuple[int, str], object],
+    anomalies_by_key: dict[tuple[int, str], Anomaly],
+) -> None:
+    from app.services.fx import convert
+
+    settings = get_settings()
+    main = config.main_currency
+    for (route_id, currency), (snapshot, route) in best.items():
+        if currency == main:
+            continue
+        main_entry = best.get((route_id, main))
+        if main_entry is None:
+            continue
+        main_price = float(main_entry[0].price)
+        converted = await convert(float(snapshot.price), currency, main)
+        if converted is None or main_price <= 0:
+            continue
+        gap_pct = (1 - converted / main_price) * 100
+        if gap_pct <= settings.cross_currency_pct:
+            continue
+
+        cross_details = {
+            "converted_main": round(converted, 2),
+            "main_price": main_price,
+            "gap_pct": round(gap_pct, 1),
+            "main_currency": main,
+        }
+        existing = anomalies_by_key.get((route_id, currency))
+        if existing is not None:
+            existing.types.append("cross_devise")
+            existing.details["cross_devise"] = cross_details
+        else:
+            stats = stats_map.get((route_id, currency))
+            anomalies_by_key[(route_id, currency)] = Anomaly(
+                route=route,
+                currency=currency,
+                price=float(snapshot.price),
+                types=["cross_devise"],
+                depart_date=snapshot.depart_date,
+                return_date=snapshot.return_date,
+                airline=snapshot.airline,
+                transfers=snapshot.transfers,
+                return_transfers=snapshot.return_transfers,
+                link=snapshot.link,
+                fetched_at=snapshot.fetched_at,
+                median_30d=getattr(stats, "median", None),
+                baseline_samples=getattr(stats, "samples", 0),
+                details={"cross_devise": cross_details},
+            )
+        logger.info(
+            "Anomalie cross-devise",
+            extra={
+                "extra_fields": {
+                    "route": f"{route.origin}-{route.destination}",
+                    "currency": currency,
+                    **cross_details,
+                }
+            },
+        )

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import SessionFactory
+from app.metrics import COLLECTION_RUNS, SNAPSHOTS_COLLECTED
 from app.models import PriceSnapshot, Route
 from app.schemas import DateWindow, WatchConfig
 from app.services.config_service import get_active_config
@@ -199,6 +200,8 @@ async def run_collection(trigger: str = "scheduled") -> dict:
                 + (f" — alertes : {alert_summary}" if alert_summary else "")
             )
             collection_state.last_snapshot_count = total
+            SNAPSHOTS_COLLECTED.labels(source="travelpayouts").inc(total)
+            COLLECTION_RUNS.labels(status="ok").inc()
             logger.info(
                 "Collecte terminée",
                 extra={"extra_fields": {"trigger": trigger, "snapshots": total, "routes": len(routes)}},
@@ -207,6 +210,7 @@ async def run_collection(trigger: str = "scheduled") -> dict:
         except Exception as exc:
             collection_state.last_status = "error"
             collection_state.last_detail = str(exc)
+            COLLECTION_RUNS.labels(status="error").inc()
             logger.exception("Échec de la collecte")
             return {"status": "error", "detail": str(exc)}
         finally:

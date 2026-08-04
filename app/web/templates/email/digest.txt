@@ -1,0 +1,10 @@
+DIGEST VOLS DU {{ date_label }} — meilleurs prix 24h ({{ main_currency }})
+
+{% if not by_destination %}Aucun relevé sur les dernières 24 heures.{% endif %}
+{%- for destination, offers in by_destination.items() %}
+-> {{ destination }}
+{%- for o in offers %}
+  {{ "%.0f"|format(o.price) }} {{ o.currency }}{% if o.over_budget %} (!) au-dessus du budget{% endif %} depuis {{ o.origin }}, {{ o.depart_date or "?" }} -> {{ o.return_date or "?" }}{% if o.airline %} ({{ o.airline }}){% endif %}
+{%- endfor %}
+{% endfor %}
+Prix aller-retour par personne, source Travelpayouts (cache).

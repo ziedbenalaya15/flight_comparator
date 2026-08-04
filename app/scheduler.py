@@ -3,6 +3,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.config import get_settings
 from app.services.baseline import recalc_all_baselines
 from app.services.collector import run_collection
+from app.services.digest import send_daily_digest
 
 
 def build_scheduler() -> AsyncIOScheduler:
@@ -23,6 +24,16 @@ def build_scheduler() -> AsyncIOScheduler:
         "interval",
         hours=6,
         id="recalc_baselines",
+        coalesce=True,
+        max_instances=1,
+    )
+    scheduler.add_job(
+        send_daily_digest,
+        "cron",
+        hour=8,
+        minute=0,
+        timezone="Europe/Paris",
+        id="daily_digest",
         coalesce=True,
         max_instances=1,
     )

@@ -15,6 +15,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.metrics import ALERTS_EMAIL
 from app.models import Alert
 from app.redis_client import get_redis
 from app.schemas import WatchConfig
@@ -31,6 +32,7 @@ TYPE_LABELS = {
     "seuil": "sous le seuil vs médiane 30j",
     "record": "nouveau record absolu",
     "chute": "chute brutale vs relevé précédent",
+    "cross_devise": "différentiel cross-devise vs devise principale",
 }
 
 _email_env = Environment(
@@ -186,5 +188,6 @@ async def process_anomalies(
                     extra={"extra_fields": {"to": to, "subject": subject}},
                 )
         await session.commit()
+        ALERTS_EMAIL.labels(status=alert.email_status).inc()
 
     return summary
