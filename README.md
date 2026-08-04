@@ -1,1 +1,57 @@
-# flight_comparator
+# Flight Error Fare Watcher
+
+Surveillance de prix de vols orientée **détection d'erreurs de prix (error fares)**, avec architecture hybride :
+
+- **Niveau 1 — baseline** : Travelpayouts/Aviasales Data API (cache ~48h), collecte toutes les 30 min pour construire les statistiques par route.
+- **Niveau 2 — confirmation live** : Duffel API, interrogée uniquement quand une anomalie candidate est détectée (Phase 4).
+- **Alertes** : email Gmail uniquement (Phase 2).
+
+## État d'avancement
+
+- ✅ **Phase 1** : squelette FastAPI + PostgreSQL + collecte Travelpayouts + stockage snapshots + dashboard minimal + bouton « Vérifier maintenant »
+- ⬜ Phase 2 : baselines + détection étage 1 + alertes email
+- ⬜ Phase 3 : page Config complète + API REST
+- ⬜ Phase 4 : module Duffel (confirmation live, cabines avant, circuit breaker)
+- ⬜ Phase 5 : cross-devise, digest quotidien, Prometheus, export CSV, tests
+
+## Setup local
+
+```bash
+cp .env.example .env
+# Renseigner au minimum TRAVELPAYOUTS_TOKEN et ADMIN_TOKEN
+docker compose up --build
+```
+
+Puis ouvrir <http://localhost:8000/> et entrer le `ADMIN_TOKEN`.
+Les migrations Alembic sont appliquées automatiquement au démarrage (`start.sh`).
+
+- Dashboard : `GET /` (token en query param `?token=...`, en header `X-Admin-Token` ou cookie)
+- Healthcheck : `GET /health`
+- Collecte immédiate : `POST /api/check` — état : `GET /api/status`
+
+### Sans Docker
+
+```bash
+python3.12 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+# Postgres et Redis accessibles via DATABASE_URL / REDIS_URL dans .env
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+## Déploiement Railway
+
+1. Créer un projet Railway avec les plugins **PostgreSQL** et **Redis**.
+2. Déployer ce repo (le `Dockerfile` est détecté automatiquement ; `start.sh` applique les migrations puis lance uvicorn sur `$PORT`).
+3. Variables d'environnement à définir : `DATABASE_URL` (au format `postgresql+asyncpg://...`), `REDIS_URL`, `TRAVELPAYOUTS_TOKEN`, `ADMIN_TOKEN`, et pour les phases suivantes `DUFFEL_TOKEN`, `GMAIL_SMTP_USER`, `GMAIL_APP_PASSWORD`, `ALERT_EMAIL_TO`.
+4. Healthcheck Railway : `/health`.
+
+## Mot de passe d'application Gmail (pour la Phase 2)
+
+1. Compte Google → **Sécurité** → activer la **Validation en 2 étapes**.
+2. Toujours dans Sécurité → **Mots de passe d'application** → créer un mot de passe pour « Mail ».
+3. Mettre ce mot de passe (16 caractères) dans `GMAIL_APP_PASSWORD` — **jamais** le mot de passe du compte.
+
+## Configuration de la surveillance
+
+La config active vit dans la table `config` (JSON versionné, une ligne active). Une config par défaut est créée au premier démarrage (PAR → ICN/BKK/JFK, EUR, départ le mois prochain). La page d'admin complète arrive en Phase 3 ; en attendant, on peut modifier le JSON directement en base.

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Connexion — Flight Watcher{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 420px; margin: 15vh auto;">
+  <h1>Flight Error Fare Watcher</h1>
+  <p class="muted">Entre le token admin pour accéder au dashboard.</p>
+  <form method="get" action="/" style="display:flex; gap:.5rem; margin-top:1rem;">
+    <input type="password" name="token" placeholder="ADMIN_TOKEN" required style="flex:1;">
+    <button type="submit">Entrer</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>✈️ Flight Error Fare Watcher</h1>
+<p class="muted">Surveillance Travelpayouts (baseline cache) — {{ total_snapshots or 0 }} relevés en base</p>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+    <div>
+      <strong>Collecte</strong>
+      {% if job.running %}
+        <span class="badge running">en cours…</span>
+      {% elif job.last_status == "ok" %}
+        <span class="badge ok">ok</span>
+      {% elif job.last_status == "error" %}
+        <span class="badge error">erreur</span>
+      {% else %}
+        <span class="badge">jamais lancée</span>
+      {% endif %}
+      <div class="muted">
+        {% if job.last_run_at %}
+          Dernière exécution : {{ job.last_run_at.strftime("%Y-%m-%d %H:%M UTC") }}
+          ({{ job.last_trigger }}) — {{ job.last_detail }}
+        {% else %}
+          Aucune exécution pour l'instant.
+        {% endif %}
+      </div>
+    </div>
+    <button id="check-btn" onclick="checkNow()">🔄 Vérifier maintenant</button>
+  </div>
+  {% if config %}
+  <div class="muted" style="margin-top:.75rem;">
+    Config active : {{ config.origins|join(", ") }} → {{ config.destinations|join(", ") }}
+    · devises {{ config.currencies|join(", ") }}
+    · départ {{ config.depart_window.start }} → {{ config.depart_window.end }}
+    {% if config.return_window %} · retour {{ config.return_window.start }} → {{ config.return_window.end }}{% endif %}
+    {% if config.paused %} · <strong>⏸ EN PAUSE</strong>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<h2>Meilleurs prix par route (dernières 24 h, top {{ 3 }})</h2>
+{% if not routes_view %}
+  <p class="muted">Aucun relevé sur les dernières 24 h. Lance une collecte avec « Vérifier maintenant ».</p>
+{% endif %}
+{% for r in routes_view %}
+<div class="card">
+  <strong>{{ r.origin }} → {{ r.destination }}</strong> <span class="muted">({{ r.currency }})</span>
+  <table>
+    <thead>
+      <tr><th>Prix</th><th>Compagnie</th><th>Escales</th><th>Aller</th><th>Retour</th><th>Relevé</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for o in r.offers %}
+      <tr>
+        <td class="price">{{ "%.0f"|format(o.price) }} {{ o.currency }}</td>
+        <td>{{ o.airline or "—" }}</td>
+        <td>{{ o.transfers if o.transfers is not none else "—" }}</td>
+        <td>{{ o.depart_date or "—" }}</td>
+        <td>{{ o.return_date or "—" }}</td>
+        <td class="muted">{{ o.fetched_at.strftime("%d/%m %H:%M") }}</td>
+        <td>{% if o.link %}<a href="{{ o.link }}" target="_blank" rel="noopener">voir</a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+
+<script>
+async function checkNow() {
+  const btn = document.getElementById("check-btn");
+  btn.disabled = true;
+  btn.textContent = "Collecte lancée…";
+  try {
+    const res = await fetch("/api/check", { method: "POST" });
+    const body = await res.json();
+    if (body.status === "already_running") {
+      btn.textContent = "Déjà en cours…";
+    }
+  } catch (e) {
+    btn.textContent = "Erreur réseau";
+  }
+  // La collecte tourne en fond : on recharge après un délai pour voir les résultats.
+  setTimeout(() => window.location.reload(), 8000);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Flight Error Fare Watcher{% endblock %}</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2rem 1.5rem; background: #0f1218; color: #e6e9ef;
+      font: 15px/1.5 system-ui, -apple-system, sans-serif; max-width: 1000px; margin-inline: auto;
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    h2 { font-size: 1.05rem; margin: 2rem 0 .75rem; color: #aeb6c4; }
+    .muted { color: #8a93a3; font-size: .85rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+    th, td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid #232a36; }
+    th { color: #8a93a3; font-weight: 500; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+    .price { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .badge { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .75rem; background: #232a36; }
+    .badge.ok { background: #123524; color: #6ee7a0; }
+    .badge.error { background: #3b1620; color: #f38ba0; }
+    .badge.running { background: #1a2c47; color: #7fb4f5; }
+    button {
+      background: #2563eb; color: white; border: 0; border-radius: 8px;
+      padding: .55rem 1.1rem; font-size: .9rem; cursor: pointer;
+    }
+    button:disabled { opacity: .5; cursor: wait; }
+    a { color: #7fb4f5; }
+    .card { background: #161b24; border: 1px solid #232a36; border-radius: 12px; padding: 1rem 1.25rem; margin-top: 1rem; }
+    input[type=text], input[type=password] {
+      background: #0f1218; border: 1px solid #232a36; border-radius: 8px;
+      color: #e6e9ef; padding: .5rem .75rem; font-size: .9rem;
+    }
+  </style>
+</head>
+<body>
+{% block content %}{% endblock %}
+</body>
+</html>
