@@ -55,7 +55,7 @@ def _in_window(d: date | None, window: DateWindow | None) -> bool:
 
 async def _ensure_routes(session: AsyncSession, config: WatchConfig) -> dict[tuple[str, str], Route]:
     """Crée les routes manquantes et retourne toutes les routes configurées, par (origine, destination)."""
-    wanted = {(o, d) for o in config.origins for d in config.destinations if o != d}
+    wanted = {(o, d) for o in config.expanded_origins for d in config.destinations if o != d}
     existing = (await session.scalars(select(Route))).all()
     by_key = {(r.origin, r.destination): r for r in existing}
     for origin, destination in sorted(wanted - by_key.keys()):
@@ -107,6 +107,19 @@ def _offers_to_snapshots(
             continue
         if not _in_window(return_date, config.return_window):
             continue
+        if depart_date and return_date:
+            nights = (return_date - depart_date).days
+            if config.stay_nights_min is not None and nights < config.stay_nights_min:
+                continue
+            if config.stay_nights_max is not None and nights > config.stay_nights_max:
+                continue
+        if config.max_stopovers is not None:
+            transfers = offer.get("transfers")
+            return_transfers = offer.get("return_transfers")
+            if transfers is not None and transfers > config.max_stopovers:
+                continue
+            if return_transfers is not None and return_transfers > config.max_stopovers:
+                continue
         snapshots.append(
             PriceSnapshot(
                 route_id=route.id,

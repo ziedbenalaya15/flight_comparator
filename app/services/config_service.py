@@ -43,11 +43,13 @@ async def get_active_config(session: AsyncSession) -> WatchConfig | None:
     return WatchConfig.model_validate(row.data)
 
 
-async def save_config(session: AsyncSession, config: WatchConfig) -> None:
-    """Versionne : désactive l'ancienne ligne et insère la nouvelle."""
+async def save_config(session: AsyncSession, config: WatchConfig) -> int:
+    """Versionne : désactive l'ancienne ligne et insère la nouvelle. Retourne l'id de version."""
     await session.execute(update(AppConfig).where(AppConfig.active.is_(True)).values(active=False))
-    session.add(AppConfig(data=config.model_dump(mode="json"), active=True))
+    row = AppConfig(data=config.model_dump(mode="json"), active=True)
+    session.add(row)
     await session.commit()
+    return row.id
 
 
 async def seed_default_config(session: AsyncSession, today: date) -> WatchConfig:

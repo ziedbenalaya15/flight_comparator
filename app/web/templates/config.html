@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Config — Flight Watcher{% endblock %}
+{% block content %}
+<p><a href="/">← Dashboard</a></p>
+<h1>⚙️ Configuration de la surveillance</h1>
+
+{% if saved %}<div class="card" style="border-color:#1f7a4d;">✅ Configuration enregistrée (version {{ saved }}).</div>{% endif %}
+{% if error %}<div class="card" style="border-color:#a03050;">❌ {{ error }}</div>{% endif %}
+{% if not config %}<div class="card">Aucune configuration active.</div>{% endif %}
+{% if config %}
+
+<form method="post" action="/config">
+  <div class="card">
+    <h2 style="margin-top:0;">Routes</h2>
+    <label>1. Destinations (codes IATA, séparés par des virgules)<br>
+      <input type="text" name="destinations" value="{{ config.destinations|join(', ') }}" style="width:100%;" placeholder="ICN, BKK, JFK">
+    </label>
+    <br><br>
+    <label>2. Zone de départ — aéroports IATA (3 lettres) ou pays entier (code ISO 2 lettres, développé automatiquement)<br>
+      <input type="text" name="origins" value="{{ config.origins|join(', ') }}" style="width:100%;" placeholder="PAR, BRU ou FR">
+    </label>
+    <div class="muted">Expansion actuelle : {{ config.expanded_origins|join(', ') }}</div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Dates & séjour</h2>
+    <label>3. Fenêtre de dates aller — plage <code>2026-10-01 -> 2026-10-14</code> ou mois entier <code>2026-10</code><br>
+      <input type="text" name="depart_window" value="{{ config.depart_window.start }} -> {{ config.depart_window.end }}" style="width:100%;">
+    </label>
+    <br><br>
+    <label>4. Fenêtre de retour (même format, vide = libre)<br>
+      <input type="text" name="return_window" value="{% if config.return_window %}{{ config.return_window.start }} -> {{ config.return_window.end }}{% endif %}" style="width:100%;">
+    </label>
+    <br><br>
+    <label>5. Durée du séjour (nuits) :
+      min <input type="text" name="stay_nights_min" value="{{ config.stay_nights_min if config.stay_nights_min is not none }}" size="4">
+      max <input type="text" name="stay_nights_max" value="{{ config.stay_nights_max if config.stay_nights_max is not none }}" size="4">
+      <span class="muted">(vide = libre)</span>
+    </label>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Cabines & contraintes</h2>
+    <p>6. Cabines suivies <span class="muted">(éco via Travelpayouts ; les autres via Duffel)</span> :</p>
+    {% for cabin in all_cabins %}
+      <label style="margin-right:1.25rem;">
+        <input type="checkbox" name="cabins" value="{{ cabin }}" {% if cabin in config.cabins %}checked{% endif %}>
+        {{ cabin_labels[cabin] }}
+      </label>
+    {% endfor %}
+    <br><br>
+    <label>7. Escales max par trajet :
+      <input type="text" name="max_stopovers" value="{{ config.max_stopovers if config.max_stopovers is not none }}" size="4">
+      <span class="muted">(vide = libre)</span>
+    </label>
+    <br><br>
+    <p>8. Budget repère par cabine ({{ config.main_currency }}) — au-dessus, les prix restent affichés marqués ⚠️ :</p>
+    {% for cabin in all_cabins %}
+      <label style="margin-right:1.25rem;">{{ cabin_labels[cabin] }}
+        <input type="text" name="budget_{{ cabin }}" value="{{ config.budgets.get(cabin, '') }}" size="7">
+      </label>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">Devises, détection & alertes</h2>
+    <label>Devises suivies (la 1ère = principale)<br>
+      <input type="text" name="currencies" value="{{ config.currencies|join(', ') }}" placeholder="EUR, USD">
+    </label>
+    <br><br>
+    <label>Seuil d'anomalie : alerte si prix sous
+      <input type="text" name="threshold_pct" value="{{ config.threshold_pct }}" size="5"> % de la médiane 30 jours
+    </label>
+    <br><br>
+    <label>Email destinataire des alertes<br>
+      <input type="text" name="alert_email_to" value="{{ config.alert_email_to or '' }}" style="width:100%;" placeholder="défaut : ALERT_EMAIL_TO de l'environnement">
+    </label>
+    <br><br>
+    <label><input type="checkbox" name="send_cache_only_alerts" {% if config.send_cache_only_alerts %}checked{% endif %}>
+      Envoyer les alertes 📉 non confirmées live (cache seulement)</label><br>
+    <label><input type="checkbox" name="digest_enabled" {% if config.digest_enabled %}checked{% endif %}>
+      Digest quotidien à 8h (meilleurs prix des 24 dernières heures)</label><br>
+    <label><input type="checkbox" name="paused" {% if config.paused %}checked{% endif %}>
+      ⏸ Mettre la surveillance en pause</label>
+  </div>
+
+  <button type="submit">💾 Enregistrer</button>
+</form>
+{% endif %}
+{% endblock %}

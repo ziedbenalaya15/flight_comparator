@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>✈️ Flight Error Fare Watcher</h1>
-<p class="muted">Surveillance Travelpayouts (baseline cache) — {{ total_snapshots or 0 }} relevés en base</p>
+<p class="muted">
+  Surveillance Travelpayouts (baseline cache) — {{ total_snapshots or 0 }} relevés en base
+  · <a href="/config">⚙️ Configuration</a>
+</p>
 
 <div class="card">
   <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
@@ -79,7 +82,7 @@
     <tbody>
       {% for o in r.offers %}
       <tr>
-        <td class="price">{{ "%.0f"|format(o.price) }} {{ o.currency }}</td>
+        <td class="price">{{ "%.0f"|format(o.price) }} {{ o.currency }}{% if o.over_budget %} ⚠️{% endif %}</td>
         <td>{{ o.airline or "—" }}</td>
         <td>{{ o.transfers if o.transfers is not none else "—" }}</td>
         <td>{{ o.depart_date or "—" }}</td>
