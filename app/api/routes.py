@@ -41,14 +41,22 @@ async def read_config(session: AsyncSession = Depends(get_session)) -> dict:
     config = await get_active_config(session)
     if config is None:
         raise HTTPException(status_code=404, detail="aucune configuration active")
-    return {"config": config.model_dump(mode="json"), "expanded_origins": config.expanded_origins}
+    return {
+        "config": config.model_dump(mode="json"),
+        "expanded_origins": config.expanded_origins,
+        "expanded_destinations": config.expanded_destinations,
+    }
 
 
 @router.put("/api/config", dependencies=[Depends(require_admin)])
 async def write_config(config: WatchConfig, session: AsyncSession = Depends(get_session)) -> dict:
     """Remplace la configuration active (nouvelle version, l'ancienne est archivée)."""
     await save_config(session, config)
-    return {"status": "saved", "expanded_origins": config.expanded_origins}
+    return {
+        "status": "saved",
+        "expanded_origins": config.expanded_origins,
+        "expanded_destinations": config.expanded_destinations,
+    }
 
 
 @router.post("/api/config/pause", dependencies=[Depends(require_admin)])

@@ -45,7 +45,7 @@ class WatchConfig(BaseModel):
     Les 8 critères de l'onboarding + devises, seuil, email, pause.
     """
 
-    # 1. Destinations (codes IATA)
+    # 1. Destinations : aéroports/villes IATA (3 lettres) ou pays ISO (2 lettres, développés)
     destinations: list[str] = Field(default_factory=list)
     # 2. Zone de départ : aéroports IATA (3 lettres) ou pays ISO (2 lettres, développés)
     origins: list[str] = Field(default_factory=lambda: ["PAR"])
@@ -110,3 +110,7 @@ class WatchConfig(BaseModel):
     @property
     def expanded_origins(self) -> list[str]:
         return expand_departure_zone(self.origins)
+
+    @property
+    def expanded_destinations(self) -> list[str]:
+        return expand_departure_zone(self.destinations)

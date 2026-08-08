@@ -39,7 +39,7 @@ async def premium_check(session: AsyncSession, config: WatchConfig) -> dict:
     if not premium_cabins:
         return {"status": "no_premium_cabins", "detail": "aucune cabine avant dans la config", "results": []}
 
-    pairs = {(o, d) for o in config.expanded_origins for d in config.destinations if o != d}
+    pairs = {(o, d) for o in config.expanded_origins for d in config.expanded_destinations if o != d}
     routes = (
         (
             await session.execute(

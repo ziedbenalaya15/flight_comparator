@@ -52,6 +52,13 @@ def test_config_defaults_and_validators():
     assert "PAR" in config.expanded_origins
 
 
+def test_destinations_country_expansion():
+    config = WatchConfig(destinations=["TH", "ICN"], depart_window=WINDOW)
+    assert "BKK" in config.expanded_destinations  # TH développé
+    assert "ICN" in config.expanded_destinations  # code précis conservé
+    assert config.destinations == ["TH", "ICN"]  # la config stocke la saisie brute
+
+
 def test_config_stay_nights_order():
     with pytest.raises(ValueError):
         WatchConfig(destinations=["ICN"], depart_window=WINDOW, stay_nights_min=10, stay_nights_max=5)

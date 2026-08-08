@@ -12,10 +12,11 @@
 <form method="post" action="/config">
   <div class="card">
     <h2 style="margin-top:0;">Routes</h2>
-    <label>1. Destinations (codes IATA, séparés par des virgules)<br>
-      <input type="text" name="destinations" value="{{ config.destinations|join(', ') }}" style="width:100%;" placeholder="ICN, BKK, JFK">
+    <label>1. Destinations — aéroports/villes IATA (3 lettres) ou pays entier (code ISO 2 lettres, développé automatiquement)<br>
+      <input type="text" name="destinations" value="{{ config.destinations|join(', ') }}" style="width:100%;" placeholder="ICN, BKK ou TH, JP">
     </label>
-    <br><br>
+    <div class="muted">Expansion actuelle : {{ config.expanded_destinations|join(', ') }}</div>
+    <br>
     <label>2. Zone de départ — aéroports IATA (3 lettres) ou pays entier (code ISO 2 lettres, développé automatiquement)<br>
       <input type="text" name="origins" value="{{ config.origins|join(', ') }}" style="width:100%;" placeholder="PAR, BRU ou FR">
     </label>

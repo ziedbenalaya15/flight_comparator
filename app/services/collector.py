@@ -56,7 +56,7 @@ def _in_window(d: date | None, window: DateWindow | None) -> bool:
 
 async def _ensure_routes(session: AsyncSession, config: WatchConfig) -> dict[tuple[str, str], Route]:
     """Crée les routes manquantes et retourne toutes les routes configurées, par (origine, destination)."""
-    wanted = {(o, d) for o in config.expanded_origins for d in config.destinations if o != d}
+    wanted = {(o, d) for o in config.expanded_origins for d in config.expanded_destinations if o != d}
     existing = (await session.scalars(select(Route))).all()
     by_key = {(r.origin, r.destination): r for r in existing}
     for origin, destination in sorted(wanted - by_key.keys()):
