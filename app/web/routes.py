@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
@@ -31,17 +31,30 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
         return templates.TemplateResponse(request, "login.html", status_code=401)
 
     config = await get_active_config(session)
-    since = datetime.now(timezone.utc) - timedelta(hours=24)
 
+    # On n'affiche que la DERNIÈRE collecte Travelpayouts éco : un prix d'une
+    # passe précédente peut avoir disparu, et les relevés Duffel cabines avant
+    # ne doivent pas se mélanger au tableau éco.
+    latest_run = await session.scalar(
+        select(func.max(PriceSnapshot.fetched_at)).where(PriceSnapshot.source == "travelpayouts")
+    )
     rows = (
-        await session.execute(
-            select(PriceSnapshot, Route)
-            .join(Route, PriceSnapshot.route_id == Route.id)
-            .where(PriceSnapshot.fetched_at >= since)
-            .order_by(PriceSnapshot.price.asc())
-            .limit(2000)
-        )
-    ).all()
+        (
+            await session.execute(
+                select(PriceSnapshot, Route)
+                .join(Route, PriceSnapshot.route_id == Route.id)
+                .where(
+                    PriceSnapshot.source == "travelpayouts",
+                    PriceSnapshot.cabin == "economy",
+                    PriceSnapshot.fetched_at == latest_run,
+                )
+                .order_by(PriceSnapshot.price.asc())
+                .limit(2000)
+            )
+        ).all()
+        if latest_run is not None
+        else []
+    )
 
     economy_budget = config.budgets.get("economy") if config else None
     grouped: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
@@ -76,7 +89,7 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
 
     total_snapshots = await session.scalar(select(func.count(PriceSnapshot.id)))
 
-    recent_alerts = (
+    recent_alerts_rows = (
         await session.execute(
             select(Alert, Route)
             .join(Route, Alert.route_id == Route.id)
@@ -84,6 +97,16 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
             .limit(10)
         )
     ).all()
+    # Le prix d'une alerte est celui observé à la détection ; on affiche en
+    # face le meilleur prix de la dernière collecte pour la même route+devise.
+    current_best = {
+        (snapshot.route_id, snapshot.currency): float(snapshot.price)
+        for snapshot, _ in reversed(rows)  # reversed : le moins cher écrase
+    }
+    recent_alerts = [
+        {"alert": alert, "route": route, "current_price": current_best.get((alert.route_id, alert.currency))}
+        for alert, route in recent_alerts_rows
+    ]
 
     response = templates.TemplateResponse(
         request,
@@ -93,6 +116,7 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
             "routes_view": routes_view,
             "recent_alerts": recent_alerts,
             "total_snapshots": total_snapshots,
+            "latest_run": latest_run,
             "job": collection_state,
             "now": datetime.now(timezone.utc),
         },

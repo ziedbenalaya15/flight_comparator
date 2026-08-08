@@ -53,15 +53,20 @@
 <div class="card">
   <table>
     <thead>
-      <tr><th>Date</th><th>Route</th><th>Type</th><th>Prix</th><th>Confiance</th><th>Email</th></tr>
+      <tr><th>Date</th><th>Route</th><th>Type</th><th>Prix à la détection</th><th>Prix actuel</th><th>Confiance</th><th>Email</th></tr>
     </thead>
     <tbody>
-      {% for alert, route in recent_alerts %}
+      {% for item in recent_alerts %}
+      {% set alert = item.alert %}{% set route = item.route %}
       <tr>
         <td class="muted">{{ alert.created_at.strftime("%d/%m %H:%M") }}</td>
         <td>{{ route.origin }} → {{ route.destination }}</td>
         <td>{{ alert.type }}</td>
         <td class="price">{{ "%.0f"|format(alert.price) }} {{ alert.currency }}</td>
+        <td class="price">
+          {% if item.current_price is not none %}{{ "%.0f"|format(item.current_price) }} {{ alert.currency }}
+          {% else %}<span class="muted">disparu</span>{% endif %}
+        </td>
         <td>{% if alert.confidence == "CONFIRME_LIVE" %}🔥 live{% else %}📉 cache{% endif %}</td>
         <td>
           {% if alert.email_status == "sent" %}<span class="badge ok">envoyé</span>
@@ -75,9 +80,16 @@
 </div>
 {% endif %}
 
-<h2>Meilleurs prix par route (dernières 24 h, top {{ 3 }})</h2>
+<h2>
+  Meilleurs prix éco par route — dernière collecte
+  {% if latest_run %}{{ latest_run.strftime("%d/%m %H:%M UTC") }}{% endif %}
+</h2>
+<p class="muted">
+  Source Travelpayouts : prix en cache (jusqu'à ~48 h de retard), à confirmer avant achat —
+  les alertes 🔥 sont, elles, vérifiées en live via Duffel.
+</p>
 {% if not routes_view %}
-  <p class="muted">Aucun relevé sur les dernières 24 h. Lance une collecte avec « Vérifier maintenant ».</p>
+  <p class="muted">Aucun relevé. Lance une collecte avec « Vérifier maintenant ».</p>
 {% endif %}
 {% for r in routes_view %}
 <div class="card">
