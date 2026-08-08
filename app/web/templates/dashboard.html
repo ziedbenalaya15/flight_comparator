@@ -121,16 +121,27 @@ async function checkNow() {
   btn.disabled = true;
   btn.textContent = "Collecte lancée…";
   try {
-    const res = await fetch("/api/check", { method: "POST" });
-    const body = await res.json();
-    if (body.status === "already_running") {
-      btn.textContent = "Déjà en cours…";
-    }
+    await fetch("/api/check", { method: "POST" });
   } catch (e) {
     btn.textContent = "Erreur réseau";
+    btn.disabled = false;
+    return;
   }
-  // La collecte tourne en fond : on recharge après un délai pour voir les résultats.
-  setTimeout(() => window.location.reload(), 8000);
+  // On suit l'état de la collecte et on ne recharge qu'une fois terminée.
+  const started = Date.now();
+  const poll = setInterval(async () => {
+    const elapsed = Math.round((Date.now() - started) / 1000);
+    btn.textContent = `Collecte en cours… ${elapsed}s`;
+    try {
+      const status = await (await fetch("/api/status")).json();
+      if (!status.running && status.last_run_at !== null && elapsed > 3) {
+        clearInterval(poll);
+        btn.textContent = "Terminé, rechargement…";
+        window.location.reload();
+      }
+    } catch (e) { /* on continue à attendre */ }
+    if (elapsed > 600) { clearInterval(poll); window.location.reload(); }
+  }, 3000);
 }
 
 async function premiumCheck() {
