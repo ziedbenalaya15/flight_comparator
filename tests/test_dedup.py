@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 
 from app.redis_client import get_redis
-from app.services.alerts import _cooldown_key, _dedup_key, _passes_antispam
+from app.services.alerts import _cooldown_key, _dedup_key, _passes_antispam, _release_antispam
 from app.services.detector import Anomaly
 from tests.conftest import random_iata
 
@@ -46,5 +46,15 @@ async def test_dedup_ttl_set():
         await _passes_antispam(anomaly)
         ttl = await get_redis().ttl(_dedup_key(anomaly))
         assert 0 < ttl <= 72 * 3600
+    finally:
+        await _cleanup(anomaly)
+
+
+async def test_failed_delivery_can_be_retried():
+    anomaly = _anomaly()
+    try:
+        assert await _passes_antispam(anomaly) is True
+        await _release_antispam(anomaly)
+        assert await _passes_antispam(anomaly) is True
     finally:
         await _cleanup(anomaly)

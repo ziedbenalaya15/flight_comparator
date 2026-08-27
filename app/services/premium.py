@@ -79,6 +79,8 @@ async def premium_check(session: AsyncSession, config: WatchConfig) -> dict:
                     "airline": offer.airline,
                     "segments_out": offer.segments_out,
                     "segments_back": offer.segments_back,
+                    "live_mode": offer.live_mode,
+                    "expires_at": offer.expires_at,
                     "over_budget": bool(budget and offer.price > budget),
                 }
                 for offer in offers

@@ -76,6 +76,15 @@ async def _passes_antispam(anomaly: Anomaly) -> bool:
         return True
 
 
+async def _release_antispam(anomaly: Anomaly) -> None:
+    """Libère la réservation si aucun email n'est parti afin que le cycle
+    suivant puisse retenter une confirmation live ou un SMTP momentanément HS."""
+    try:
+        await get_redis().delete(_dedup_key(anomaly), _cooldown_key(anomaly))
+    except Exception:
+        logger.warning("Redis indisponible pendant la libération anti-spam", exc_info=True)
+
+
 def _links(anomaly: Anomaly) -> dict:
     r = anomaly.route
     query = f"flights from {r.origin} to {r.destination}"
@@ -87,7 +96,12 @@ def _links(anomaly: Anomaly) -> dict:
     }
 
 
-def build_email(anomaly: Anomaly, confidence: str, live_price: float | None = None) -> tuple[str, str, str]:
+def build_email(
+    anomaly: Anomaly,
+    confidence: str,
+    live_price: float | None = None,
+    live_currency: str | None = None,
+) -> tuple[str, str, str]:
     """Retourne (sujet, html, texte)."""
     r = anomaly.route
     pct = anomaly.pct_below_median
@@ -114,6 +128,7 @@ def build_email(anomaly: Anomaly, confidence: str, live_price: float | None = No
         "links": _links(anomaly),
         "freshness_min": freshness_min,
         "live_price": live_price,
+        "live_currency": live_currency or anomaly.currency,
     }
     html = _email_env.get_template("alert.html").render(**context)
     text = _email_env.get_template("alert.txt").render(**context)
@@ -135,14 +150,16 @@ async def process_anomalies(
         # Étage 2 : confirmation live Duffel (jamais bloquante pour le pipeline)
         confidence = CONFIDENCE_CACHE
         live_price: float | None = None
+        live_currency: str | None = None
         if duffel_enabled():
             try:
-                confirmed, live_price = await confirm_anomaly_live(
+                confirmed, live_price, live_currency = await confirm_anomaly_live(
                     anomaly.route.origin,
                     anomaly.route.destination,
                     anomaly.depart_date,
                     anomaly.return_date,
                     anomaly.price,
+                    anomaly.currency,
                 )
                 if confirmed:
                     confidence = CONFIDENCE_LIVE
@@ -174,7 +191,7 @@ async def process_anomalies(
             logger.warning("SMTP non configuré, alerte journalisée sans email")
         else:
             to = config.alert_email_to or settings.alert_email_to
-            subject, html, text = build_email(anomaly, confidence, live_price)
+            subject, html, text = build_email(anomaly, confidence, live_price, live_currency)
             try:
                 await send_email(to, subject, html, text)
                 alert.email_status = "sent"
@@ -189,5 +206,7 @@ async def process_anomalies(
                 )
         await session.commit()
         ALERTS_EMAIL.labels(status=alert.email_status).inc()
+        if alert.email_status != "sent":
+            await _release_antispam(anomaly)
 
     return summary

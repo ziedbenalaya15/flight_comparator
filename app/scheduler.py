@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.config import get_settings
@@ -14,6 +16,7 @@ def build_scheduler() -> AsyncIOScheduler:
         minutes=get_settings().collect_interval_minutes,
         id="collect_travelpayouts",
         kwargs={"trigger": "scheduled"},
+        next_run_time=datetime.now(timezone.utc),
         coalesce=True,
         max_instances=1,
     )

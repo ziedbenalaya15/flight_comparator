@@ -13,6 +13,14 @@ CABIN_LABELS = {
     "first": "First",
 }
 
+CURRENCY_ALIASES = {
+    "DOL": "USD",
+    "DOLLAR": "USD",
+    "DOLLARS": "USD",
+    "EURO": "EUR",
+    "EUROS": "EUR",
+}
+
 
 class DateWindow(BaseModel):
     start: date
@@ -79,7 +87,16 @@ class WatchConfig(BaseModel):
     @field_validator("currencies")
     @classmethod
     def _upper_currency(cls, v: list[str]) -> list[str]:
-        out = [c.strip().upper() for c in v if c.strip()]
+        out: list[str] = []
+        for raw in v:
+            code = raw.strip().upper()
+            if not code:
+                continue
+            code = CURRENCY_ALIASES.get(code, code)
+            if not re.fullmatch(r"[A-Z]{3}", code):
+                raise ValueError(f"devise invalide : {raw!r} (attendu EUR, USD, GBP…)")
+            if code not in out:
+                out.append(code)
         return out or ["EUR"]
 
     @field_validator("cabins")

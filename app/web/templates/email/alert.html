@@ -51,7 +51,7 @@
       {% if live_price is not none %}
       <tr>
         <td style="padding:10px 24px; color:#6b7280;">Prix live (Duffel)</td>
-        <td style="padding:10px 24px; font-weight:600;">{{ "%.0f"|format(live_price) }} {{ anomaly.currency }}</td>
+        <td style="padding:10px 24px; font-weight:600;">{{ "%.0f"|format(live_price) }} {{ live_currency }}</td>
       </tr>
       {% endif %}
       <tr style="background:#f9fafb;">

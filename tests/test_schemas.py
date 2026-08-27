@@ -59,6 +59,25 @@ def test_destinations_country_expansion():
     assert config.destinations == ["TH", "ICN"]  # la config stocke la saisie brute
 
 
+def test_requested_destinations_are_expanded():
+    config = WatchConfig(
+        destinations=["LB", "EG", "TN", "IR", "BR", "MX", "DO"],
+        depart_window=WINDOW,
+    )
+    airports = config.expanded_destinations
+    for airport in ["BEY", "CAI", "HBE", "SSH", "TUN", "IKA", "THR", "SAO", "RIO", "MEX", "CUN", "PUJ", "SDQ", "STI"]:
+        assert airport in airports
+
+
+def test_currency_aliases_and_duplicates():
+    config = WatchConfig(
+        destinations=["BEY"],
+        depart_window=WINDOW,
+        currencies=["eur", "DOL", "USD"],
+    )
+    assert config.currencies == ["EUR", "USD"]
+
+
 def test_config_stay_nights_order():
     with pytest.raises(ValueError):
         WatchConfig(destinations=["ICN"], depart_window=WINDOW, stay_nights_min=10, stay_nights_max=5)

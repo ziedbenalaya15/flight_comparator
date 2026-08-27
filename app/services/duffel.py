@@ -18,6 +18,7 @@ from datetime import date
 import httpx
 
 from app.config import get_settings
+from app.services.fx import convert
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,8 @@ class DuffelOffer:
     airline: str | None
     segments_out: int
     segments_back: int
+    live_mode: bool
+    expires_at: str | None
 
 
 class DuffelUnavailable(Exception):
@@ -131,7 +134,9 @@ async def search_offers(
         raise DuffelUnavailable(str(exc)) from exc
 
     _breaker.record_success()
-    offers_raw = response.json().get("data", {}).get("offers", [])
+    request_data = response.json().get("data", {})
+    offers_raw = request_data.get("offers", [])
+    live_mode = bool(request_data.get("live_mode"))
     offers = []
     for raw in offers_raw:
         try:
@@ -144,6 +149,8 @@ async def search_offers(
                     airline=(raw.get("owner") or {}).get("iata_code"),
                     segments_out=len(slices_raw[0].get("segments", [])) if slices_raw else 0,
                     segments_back=len(slices_raw[1].get("segments", [])) if len(slices_raw) > 1 else 0,
+                    live_mode=live_mode,
+                    expires_at=raw.get("expires_at"),
                 )
             )
         except (KeyError, ValueError, TypeError):
@@ -158,17 +165,27 @@ async def confirm_anomaly_live(
     depart_date: date | None,
     return_date: date | None,
     cached_price: float,
+    cached_currency: str,
     tolerance: float = 1.20,
-) -> tuple[bool, float | None]:
+) -> tuple[bool, float | None, str | None]:
     """Vérifie qu'une offre live existe à un prix proche du prix cache détecté.
 
-    Retourne (confirmé, meilleur prix live). Confirmé si le meilleur prix live
-    est <= prix cache x tolérance (20 % de marge : les prix cache ont ~48h).
+    Retourne (confirmé, meilleur prix live, devise live). Le prix Duffel est
+    converti dans la devise du cache avant comparaison : comparer deux montants
+    de devises différentes produirait de faux positifs ou de faux négatifs.
     """
     if depart_date is None:
         raise DuffelUnavailable("date de départ inconnue, confirmation impossible")
     offers = await search_offers(origin, destination, depart_date, return_date, cabin="economy")
     if not offers:
-        return False, None
-    best = offers[0].price
-    return best <= cached_price * tolerance, best
+        return False, None, None
+    best = offers[0]
+    if not best.live_mode:
+        raise DuffelUnavailable("DUFFEL_TOKEN en mode test ; confirmation réelle impossible")
+    try:
+        comparable_price = await convert(best.price, best.currency, cached_currency)
+    except (httpx.HTTPError, ValueError, TypeError) as exc:
+        raise DuffelUnavailable(f"conversion {best.currency}/{cached_currency} indisponible") from exc
+    if comparable_price is None:
+        raise DuffelUnavailable(f"taux {best.currency}/{cached_currency} inconnu")
+    return comparable_price <= cached_price * tolerance, best.price, best.currency

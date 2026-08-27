@@ -92,6 +92,120 @@ async def premium(session: AsyncSession = Depends(get_session)) -> dict:
     return await premium_check(session, config)
 
 
+@router.post("/api/offers/{snapshot_id}/verify", dependencies=[Depends(require_admin)])
+async def verify_offer_live(snapshot_id: int, session: AsyncSession = Depends(get_session)) -> dict:
+    """Revérifie une offre Travelpayouts précise auprès de Duffel.
+
+    Travelpayouts reste la source de découverte en cache ; ce contrôle ciblé
+    utilise exactement la route et les dates de la ligne cliquée.
+    """
+    from app.services.duffel import DuffelUnavailable, duffel_enabled, search_offers
+
+    if not duffel_enabled():
+        return {"status": "disabled", "detail": "DUFFEL_TOKEN non configuré", "offers": []}
+    row = (
+        await session.execute(
+            select(PriceSnapshot, Route)
+            .join(Route, PriceSnapshot.route_id == Route.id)
+            .where(PriceSnapshot.id == snapshot_id)
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="offre introuvable")
+    snapshot, route = row
+    if snapshot.depart_date is None:
+        raise HTTPException(status_code=422, detail="date de départ absente, vérification impossible")
+    try:
+        offers = await search_offers(
+            route.origin,
+            route.destination,
+            snapshot.depart_date,
+            snapshot.return_date,
+            cabin="economy",
+        )
+    except DuffelUnavailable as exc:
+        return {"status": "unavailable", "detail": str(exc), "offers": []}
+
+    return {
+        "status": "ok",
+        "origin": route.origin,
+        "destination": route.destination,
+        "depart_date": snapshot.depart_date.isoformat(),
+        "return_date": snapshot.return_date.isoformat() if snapshot.return_date else None,
+        "cached_price": float(snapshot.price),
+        "cached_currency": snapshot.currency,
+        "cached_at": snapshot.fetched_at.isoformat(),
+        "live_mode": offers[0].live_mode if offers else None,
+        "offers": [
+            {
+                "price": offer.price,
+                "currency": offer.currency,
+                "airline": offer.airline,
+                "segments_out": offer.segments_out,
+                "segments_back": offer.segments_back,
+                "expires_at": offer.expires_at,
+            }
+            for offer in offers
+        ],
+    }
+
+
+@router.get("/api/notifications/status", dependencies=[Depends(require_admin)])
+async def notification_status(session: AsyncSession = Depends(get_session)) -> dict:
+    """État non sensible de la chaîne d'alerte et dernier résultat connu."""
+    from app.config import get_settings
+    from app.services.duffel import duffel_enabled
+    from app.services.mailer import smtp_configured
+
+    config = await get_active_config(session)
+    latest = await session.scalar(select(Alert).order_by(Alert.created_at.desc()).limit(1))
+    settings = get_settings()
+    return {
+        "smtp_configured": smtp_configured(),
+        "recipient_configured": bool((config.alert_email_to if config else None) or settings.alert_email_to),
+        "duffel_configured": duffel_enabled(),
+        "send_cache_only_alerts": config.send_cache_only_alerts if config else None,
+        "interval_minutes": settings.collect_interval_minutes,
+        "last_alert": (
+            {
+                "created_at": latest.created_at.isoformat(),
+                "confidence": latest.confidence,
+                "email_status": latest.email_status,
+                "sent_at": latest.sent_at.isoformat() if latest.sent_at else None,
+            }
+            if latest
+            else None
+        ),
+    }
+
+
+@router.post("/api/notifications/test", dependencies=[Depends(require_admin)])
+async def test_notification(session: AsyncSession = Depends(get_session)) -> dict:
+    """Envoie un email de test explicite au destinataire configuré."""
+    from app.config import get_settings
+    from app.services.mailer import send_email, smtp_configured
+
+    if not smtp_configured():
+        return {"status": "disabled", "detail": "Gmail SMTP non configuré"}
+    config = await get_active_config(session)
+    settings = get_settings()
+    recipient = (config.alert_email_to if config else None) or settings.alert_email_to
+    if not recipient:
+        return {"status": "disabled", "detail": "destinataire d'alerte non configuré"}
+    now = datetime.now(timezone.utc)
+    await send_email(
+        recipient,
+        "✅ Test Flight Error Fare Watcher",
+        (
+            "<h2>✅ Notifications opérationnelles</h2>"
+            "<p>Railway a réussi à envoyer cet email via Gmail SMTP.</p>"
+            f"<p>Test UTC : {now:%Y-%m-%d %H:%M:%S}</p>"
+        ),
+        f"Notifications opérationnelles. Test Railway UTC : {now:%Y-%m-%d %H:%M:%S}",
+    )
+    return {"status": "sent", "sent_at": now.isoformat()}
+
+
 @router.get("/api/export", dependencies=[Depends(require_admin)])
 async def export_csv(
     dataset: str = "snapshots",

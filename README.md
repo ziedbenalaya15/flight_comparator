@@ -3,7 +3,7 @@
 Surveillance de prix de vols orientée **détection d'erreurs de prix (error fares)**, avec architecture hybride :
 
 - **Niveau 1 — baseline** : Travelpayouts/Aviasales Data API (cache ~48h), collecte toutes les 30 min pour construire les statistiques par route.
-- **Niveau 2 — confirmation live** : Duffel API, interrogée uniquement quand une anomalie candidate est détectée (Phase 4).
+- **Niveau 2 — confirmation live** : Duffel API, interrogée quand une anomalie candidate est détectée ou à la demande sur une offre du dashboard.
 - **Alertes** : email Gmail uniquement (Phase 2).
 
 ## État d'avancement
@@ -30,6 +30,8 @@ Les migrations Alembic sont appliquées automatiquement au démarrage (`start.sh
 - Collecte immédiate : `POST /api/check` — état : `GET /api/status`
 - Config : `GET|PUT /api/config`, `POST /api/config/pause|resume`
 - Cabines avant (Duffel) : `POST /api/premium`
+- Vérification live d'une offre éco : `POST /api/offers/{snapshot_id}/verify`
+- État / test des notifications : `GET /api/notifications/status`, `POST /api/notifications/test`
 - Export CSV : `GET /api/export?dataset=snapshots|alerts&days=30`
 - Digest manuel : `POST /api/digest/send`
 
@@ -71,7 +73,7 @@ uvicorn app.main:app --reload
 
 ## Configuration de la surveillance
 
-La config active vit dans la table `config` (JSON versionné, une ligne active). Une config par défaut est créée au premier démarrage (PAR → ICN/BKK/JFK, EUR, départ le mois prochain). La page d'admin complète arrive en Phase 3 ; en attendant, on peut modifier le JSON directement en base.
+La config active vit dans la table `config` (JSON versionné, une ligne active). Une config par défaut est créée au premier démarrage (PAR → ICN/BKK/JFK, EUR, départ le mois prochain). Elle se modifie depuis `/config`. Les pays `LB`, `EG`, `TN`, `IR`, `BR`, `MX` et `DO` sont notamment développés automatiquement vers leurs principaux aéroports.
 
 Champs de détection dans la config JSON : `threshold_pct` (défaut 40 — % sous la médiane 30j), `send_cache_only_alerts` (envoyer les alertes 📉 non confirmées live), `alert_email_to` (défaut : variable `ALERT_EMAIL_TO`).
 
@@ -83,4 +85,6 @@ Champs de détection dans la config JSON : `threshold_pct` (défaut 40 — % sou
 - **record** : nouveau minimum absolu sur la route+devise
 - **chute** : baisse > 50 % vs le relevé précédent de moins de 6 h
 
-Garde-fous : pas d'alerte seuil/record avant `MIN_BASELINE_SAMPLES` relevés (30) et 24 h d'historique. Anti-spam : dédup Redis 72 h sur (route + prix arrondi + type), cooldown 2 h par route contourné si le nouveau prix est plus bas, fail-open si Redis est indisponible. Toutes les alertes sont journalisées dans la table `alerts` (statut email visible sur le dashboard), y compris quand l'email est désactivé ou échoue.
+Garde-fous : pas d'alerte seuil/record avant `MIN_BASELINE_SAMPLES` relevés (30) et 24 h d'historique. Anti-spam : dédup Redis 72 h sur (route + prix arrondi + type), cooldown 2 h par route contourné si le nouveau prix est plus bas, fail-open si Redis est indisponible. Si l'email échoue ou est désactivé, la réservation anti-spam est libérée afin que la collecte suivante puisse retenter. Toutes les alertes sont journalisées dans la table `alerts` (statut email visible sur le dashboard).
+
+Les prix Travelpayouts sont des prix indicatifs issus du cache Aviasales (recherches vues au cours des 48 dernières heures) et peuvent avoir changé au clic. Le bouton « Vérifier live » interroge Duffel sur la route et les dates exactes et affiche aussi si le token Duffel est en mode réel ou en mode test.

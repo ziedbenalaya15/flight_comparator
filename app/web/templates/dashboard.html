@@ -43,6 +43,12 @@
     {% if config.return_window %} · retour {{ config.return_window.start }} → {{ config.return_window.end }}{% endif %}
     {% if config.paused %} · <strong>⏸ EN PAUSE</strong>{% endif %}
   </div>
+  <div class="muted" style="margin-top:.5rem;">
+    Alertes : cycle toutes les {{ monitoring_interval_minutes }} min ·
+    Duffel live {% if duffel_ready %}<span class="badge ok">configuré</span>{% else %}<span class="badge error">absent</span>{% endif %} ·
+    Gmail {% if smtp_ready %}<span class="badge ok">configuré</span>{% else %}<span class="badge error">absent</span>{% endif %}
+    <button id="test-email-btn" onclick="testEmail()" style="margin-left:.5rem; background:#374151; padding:.3rem .65rem;">Tester l'email</button>
+  </div>
   {% endif %}
 </div>
 
@@ -96,7 +102,7 @@
   <strong>{{ r.origin }} → {{ r.destination }}</strong> <span class="muted">({{ r.currency }})</span>
   <table>
     <thead>
-      <tr><th>Prix</th><th>Compagnie</th><th>Escales</th><th>Aller</th><th>Retour</th><th>Relevé</th><th></th></tr>
+      <tr><th>Prix indicatif</th><th>Compagnie</th><th>Escales</th><th>Aller</th><th>Retour</th><th>Relevé</th><th>Vérification</th></tr>
     </thead>
     <tbody>
       {% for o in r.offers %}
@@ -107,7 +113,11 @@
         <td>{{ o.depart_date or "—" }}</td>
         <td>{{ o.return_date or "—" }}</td>
         <td class="muted">{{ o.fetched_at.strftime("%d/%m %H:%M") }}</td>
-        <td>{% if o.link %}<a href="{{ o.link }}" target="_blank" rel="noopener">voir</a>{% endif %}</td>
+        <td>
+          <button id="verify-{{ o.id }}" onclick="verifyOffer({{ o.id }})" style="padding:.3rem .6rem;">Vérifier live</button>
+          {% if o.link %}<a href="{{ o.link }}" target="_blank" rel="noopener" style="margin-left:.4rem;">ouvrir le cache</a>{% endif %}
+          <div id="live-{{ o.id }}" class="muted" style="margin-top:.35rem;"></div>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
@@ -180,6 +190,51 @@ async function premiumCheck() {
   }
   btn.disabled = false;
   btn.textContent = "💺 Prix cabines avant";
+}
+
+async function verifyOffer(snapshotId) {
+  const btn = document.getElementById(`verify-${snapshotId}`);
+  const output = document.getElementById(`live-${snapshotId}`);
+  btn.disabled = true;
+  btn.textContent = "Recherche…";
+  output.textContent = "Interrogation directe des compagnies via Duffel…";
+  try {
+    const response = await fetch(`/api/offers/${snapshotId}/verify`, {method: "POST"});
+    const body = await response.json();
+    if (body.status !== "ok") {
+      output.textContent = `Indisponible : ${body.detail || body.status}`;
+    } else if (!body.offers.length) {
+      output.textContent = "Aucune offre live pour ces dates : le prix indicatif n'est plus disponible.";
+    } else {
+      const best = body.offers[0];
+      const mode = body.live_mode ? "LIVE" : "TEST — prix non réels";
+      const expiry = best.expires_at ? ` · expire ${new Date(best.expires_at).toLocaleTimeString("fr-FR")}` : "";
+      output.replaceChildren();
+      const badge = document.createElement("span");
+      badge.className = `badge ${body.live_mode ? "ok" : "error"}`;
+      badge.textContent = mode;
+      const price = document.createElement("strong");
+      price.textContent = `${Math.round(best.price)} ${best.currency}`;
+      output.append(badge, " ", price, ` · ${best.airline || "compagnie n/c"}${expiry}`);
+    }
+  } catch (e) {
+    output.textContent = "Erreur réseau pendant la vérification live.";
+  }
+  btn.disabled = false;
+  btn.textContent = "Revérifier live";
+}
+
+async function testEmail() {
+  const btn = document.getElementById("test-email-btn");
+  btn.disabled = true;
+  btn.textContent = "Envoi…";
+  try {
+    const body = await (await fetch("/api/notifications/test", {method: "POST"})).json();
+    btn.textContent = body.status === "sent" ? "✅ Email envoyé" : `Échec : ${body.detail || body.status}`;
+  } catch (e) {
+    btn.textContent = "Échec réseau";
+  }
+  setTimeout(() => { btn.disabled = false; btn.textContent = "Tester l'email"; }, 6000);
 }
 </script>
 {% endblock %}
