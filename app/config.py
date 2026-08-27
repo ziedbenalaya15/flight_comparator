@@ -1,12 +1,13 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "postgresql+asyncpg://flights:flights@localhost:5432/flights"
+    database_url: str
     redis_url: str = "redis://localhost:6379/0"
 
     travelpayouts_token: str = ""
@@ -32,6 +33,16 @@ class Settings(BaseSettings):
     # Anti-spam
     dedup_ttl_hours: int = 72
     cooldown_hours: int = 2
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def use_asyncpg_driver(cls, value: str) -> str:
+        """Accepte directement les URL PostgreSQL fournies par Railway."""
+        if value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql+asyncpg://", 1)
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return value
 
 
 @lru_cache

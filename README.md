@@ -54,10 +54,14 @@ uvicorn app.main:app --reload
 
 ## Déploiement Railway
 
-1. Créer un projet Railway avec les plugins **PostgreSQL** et **Redis**.
-2. Déployer ce repo (le `Dockerfile` est détecté automatiquement ; `start.sh` applique les migrations puis lance uvicorn sur `$PORT`).
-3. Variables d'environnement à définir : `DATABASE_URL` (au format `postgresql+asyncpg://...`), `REDIS_URL`, `TRAVELPAYOUTS_TOKEN`, `ADMIN_TOKEN`, et pour les phases suivantes `DUFFEL_TOKEN`, `GMAIL_SMTP_USER`, `GMAIL_APP_PASSWORD`, `ALERT_EMAIL_TO`.
-4. Healthcheck Railway : `/health`.
+1. Créer un projet Railway avec les services **PostgreSQL** et **Redis**.
+2. Déployer ce repo (le `Dockerfile` est détecté automatiquement ; `start.sh` attend PostgreSQL, applique les migrations puis lance uvicorn sur `$PORT`).
+3. Dans l'onglet **Variables du service applicatif** (et non dans le service PostgreSQL), ajouter les références :
+   - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
+   - `REDIS_URL=${{Redis.REDIS_URL}}`
+   Les noms `Postgres` et `Redis` doivent correspondre aux noms réels des services Railway. Les URL `postgres://...` et `postgresql://...` de Railway sont automatiquement adaptées pour `asyncpg`.
+4. Ajouter dans ce même onglet `TRAVELPAYOUTS_TOKEN`, `ADMIN_TOKEN`, et si utilisés `DUFFEL_TOKEN`, `GMAIL_SMTP_USER`, `GMAIL_APP_PASSWORD`, `ALERT_EMAIL_TO`.
+5. Déployer les changements de variables, puis définir le healthcheck Railway sur `/health` et générer un domaine public dans **Settings → Networking**.
 
 ## Mot de passe d'application Gmail (pour la Phase 2)
 
