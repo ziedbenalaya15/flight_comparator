@@ -17,7 +17,7 @@ from app.models import Alert, PriceSnapshot, Route
 from app.schemas import CABIN_LABELS, CABINS, WatchConfig, parse_window
 from app.services.config_service import get_active_config, save_config
 from app.services.duffel import duffel_enabled
-from app.services.mailer import smtp_configured
+from app.services.mailer import email_configured, email_provider
 from app.state import collection_state
 
 router = APIRouter()
@@ -124,7 +124,8 @@ async def dashboard(request: Request, session: AsyncSession = Depends(get_sessio
             "now": datetime.now(timezone.utc),
             "monitoring_interval_minutes": get_settings().collect_interval_minutes,
             "duffel_ready": duffel_enabled(),
-            "smtp_ready": smtp_configured(),
+            "email_ready": email_configured(),
+            "email_provider": email_provider(),
         },
     )
     # Le token arrive en query param la 1ère fois -> on le pose en cookie de session

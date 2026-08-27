@@ -11,7 +11,7 @@ from app.config import get_settings
 from app.db import SessionFactory
 from app.models import PriceSnapshot, Route
 from app.services.config_service import get_active_config
-from app.services.mailer import send_email, smtp_configured
+from app.services.mailer import email_configured, send_email
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +29,9 @@ async def send_daily_digest() -> dict:
         config = await get_active_config(session)
         if config is None or not config.digest_enabled:
             return {"status": "disabled"}
-        if not smtp_configured():
-            logger.warning("Digest activé mais SMTP non configuré")
-            return {"status": "no_smtp"}
+        if not email_configured():
+            logger.warning("Digest activé mais fournisseur email non configuré")
+            return {"status": "no_email"}
 
         since = datetime.now(timezone.utc) - timedelta(hours=24)
         rows = (

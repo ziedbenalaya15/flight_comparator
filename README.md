@@ -4,12 +4,12 @@ Surveillance de prix de vols orientée **détection d'erreurs de prix (error far
 
 - **Niveau 1 — baseline** : Travelpayouts/Aviasales Data API (cache ~48h), collecte toutes les 30 min pour construire les statistiques par route.
 - **Niveau 2 — confirmation live** : Duffel API, interrogée quand une anomalie candidate est détectée ou à la demande sur une offre du dashboard.
-- **Alertes** : email Gmail uniquement (Phase 2).
+- **Alertes** : Resend via HTTPS (recommandé sur Railway), avec Gmail SMTP en secours local.
 
 ## État d'avancement
 
 - ✅ **Phase 1** : squelette FastAPI + PostgreSQL + collecte Travelpayouts + stockage snapshots + dashboard minimal + bouton « Vérifier maintenant »
-- ✅ **Phase 2** : baselines (médiane 30j, p10, p25, stddev) + détection étage 1 (seuil, record, chute) + alertes email Gmail avec dédup Redis 72h et cooldown 2h + template HTML/texte
+- ✅ **Phase 2** : baselines (médiane 30j, p10, p25, stddev) + détection étage 1 (seuil, record, chute) + alertes email Resend/Gmail avec dédup Redis 72h et cooldown 2h + template HTML/texte
 - ✅ **Phase 3** : page Config complète (8 critères, zone de départ par pays, budgets par cabine) + API REST (`/api/config`, pause/reprise)
 - ✅ **Phase 4** : module Duffel isolé — confirmation live des anomalies (🔥 `CONFIRME_LIVE`), bouton « Prix cabines avant » (`/api/premium`), circuit breaker
 - ✅ **Phase 5** : critère cross-devise (taux ECB frankfurter.app), digest quotidien 8h, métriques Prometheus `/metrics`, export CSV, tests pytest
@@ -62,10 +62,15 @@ uvicorn app.main:app --reload
    - `DATABASE_URL=${{Postgres.DATABASE_URL}}`
    - `REDIS_URL=${{Redis.REDIS_URL}}`
    Les noms `Postgres` et `Redis` doivent correspondre aux noms réels des services Railway. Les URL `postgres://...` et `postgresql://...` de Railway sont automatiquement adaptées pour `asyncpg`.
-4. Ajouter dans ce même onglet `TRAVELPAYOUTS_TOKEN`, `ADMIN_TOKEN`, et si utilisés `DUFFEL_TOKEN`, `GMAIL_SMTP_USER`, `GMAIL_APP_PASSWORD`, `ALERT_EMAIL_TO`.
-5. Déployer les changements de variables, puis définir le healthcheck Railway sur `/health` et générer un domaine public dans **Settings → Networking**.
+4. Ajouter dans ce même onglet `TRAVELPAYOUTS_TOKEN`, `ADMIN_TOKEN`, et si utilisés `DUFFEL_TOKEN`, `ALERT_EMAIL_TO`.
+5. Pour les notifications Railway, ajouter `RESEND_API_KEY` et éventuellement `RESEND_FROM_EMAIL`. Sans domaine vérifié, laisser `Flight Alerts <onboarding@resend.dev>` et utiliser comme destinataire l'adresse du compte Resend. Gmail SMTP reste disponible en secours local via `GMAIL_SMTP_USER` et `GMAIL_APP_PASSWORD`, mais les plans Railway Trial/Hobby/Free bloquent SMTP.
+6. Déployer les changements de variables, puis définir le healthcheck Railway sur `/health` et générer un domaine public dans **Settings → Networking**.
 
-## Mot de passe d'application Gmail (pour la Phase 2)
+## Notifications email
+
+Resend est prioritaire dès que `RESEND_API_KEY` est défini. `RESEND_FROM_EMAIL` vaut par défaut `Flight Alerts <onboarding@resend.dev>` ; cette adresse de test est limitée au destinataire du compte Resend. Pour envoyer vers d'autres adresses, vérifier un domaine dans Resend puis utiliser une adresse de ce domaine.
+
+### Secours Gmail SMTP (local ou plan autorisant SMTP)
 
 1. Compte Google → **Sécurité** → activer la **Validation en 2 étapes**.
 2. Toujours dans Sécurité → **Mots de passe d'application** → créer un mot de passe pour « Mail ».

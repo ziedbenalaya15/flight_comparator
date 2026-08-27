@@ -1,10 +1,10 @@
-"""Pipeline d'alertes : dédup Redis (TTL 72h) + cooldown par route + email Gmail.
+"""Pipeline d'alertes : dédup Redis (TTL 72h) + cooldown par route + email.
 
 Statuts email possibles sur la ligne `alerts` :
 - sent            : email parti
-- failed          : échec SMTP après retries (visible dans l'admin)
+- failed          : échec fournisseur après retries (visible dans l'admin)
 - skipped_config  : alerte CACHE_SEULEMENT et send_cache_only_alerts=False
-- skipped_no_smtp : GMAIL_SMTP_USER / GMAIL_APP_PASSWORD non configurés
+- skipped_no_smtp : aucun fournisseur email configuré (nom historique conservé en DB)
 """
 import logging
 from datetime import datetime, timezone
@@ -21,7 +21,7 @@ from app.redis_client import get_redis
 from app.schemas import WatchConfig
 from app.services.detector import Anomaly
 from app.services.duffel import DuffelUnavailable, confirm_anomaly_live, duffel_enabled
-from app.services.mailer import send_email, smtp_configured
+from app.services.mailer import email_configured, send_email
 
 logger = logging.getLogger(__name__)
 
@@ -185,10 +185,10 @@ async def process_anomalies(
         if confidence == CONFIDENCE_CACHE and not config.send_cache_only_alerts:
             alert.email_status = "skipped_config"
             summary["skipped"] += 1
-        elif not smtp_configured():
+        elif not email_configured():
             alert.email_status = "skipped_no_smtp"
             summary["skipped"] += 1
-            logger.warning("SMTP non configuré, alerte journalisée sans email")
+            logger.warning("Fournisseur email non configuré, alerte journalisée sans email")
         else:
             to = config.alert_email_to or settings.alert_email_to
             subject, html, text = build_email(anomaly, confidence, live_price, live_currency)

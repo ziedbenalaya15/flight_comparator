@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     travelpayouts_token: str = ""
     duffel_token: str = ""
 
+    # Resend passe par HTTPS et fonctionne donc sur tous les plans Railway.
+    resend_api_key: str = ""
+    resend_from_email: str = "Flight Alerts <onboarding@resend.dev>"
+
+    # Secours SMTP pour le local ou un hébergement autorisant les ports SMTP.
     gmail_smtp_user: str = ""
     gmail_app_password: str = ""
     alert_email_to: str = ""

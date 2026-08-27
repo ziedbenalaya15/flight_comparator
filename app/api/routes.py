@@ -1,6 +1,7 @@
 import asyncio
 import csv
 import io
+import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,6 +19,7 @@ from app.services.config_service import get_active_config, save_config
 from app.state import collection_state
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
@@ -155,12 +157,14 @@ async def notification_status(session: AsyncSession = Depends(get_session)) -> d
     """État non sensible de la chaîne d'alerte et dernier résultat connu."""
     from app.config import get_settings
     from app.services.duffel import duffel_enabled
-    from app.services.mailer import smtp_configured
+    from app.services.mailer import email_configured, email_provider, smtp_configured
 
     config = await get_active_config(session)
     latest = await session.scalar(select(Alert).order_by(Alert.created_at.desc()).limit(1))
     settings = get_settings()
     return {
+        "email_configured": email_configured(),
+        "email_provider": email_provider(),
         "smtp_configured": smtp_configured(),
         "recipient_configured": bool((config.alert_email_to if config else None) or settings.alert_email_to),
         "duffel_configured": duffel_enabled(),
@@ -183,27 +187,47 @@ async def notification_status(session: AsyncSession = Depends(get_session)) -> d
 async def test_notification(session: AsyncSession = Depends(get_session)) -> dict:
     """Envoie un email de test explicite au destinataire configuré."""
     from app.config import get_settings
-    from app.services.mailer import send_email, smtp_configured
+    from app.services.mailer import EmailDeliveryError, email_configured, email_provider, send_email
 
-    if not smtp_configured():
-        return {"status": "disabled", "detail": "Gmail SMTP non configuré"}
+    if not email_configured():
+        return {"status": "disabled", "detail": "Aucun fournisseur email configuré"}
     config = await get_active_config(session)
     settings = get_settings()
     recipient = (config.alert_email_to if config else None) or settings.alert_email_to
     if not recipient:
         return {"status": "disabled", "detail": "destinataire d'alerte non configuré"}
     now = datetime.now(timezone.utc)
-    await send_email(
-        recipient,
-        "✅ Test Flight Error Fare Watcher",
-        (
-            "<h2>✅ Notifications opérationnelles</h2>"
-            "<p>Railway a réussi à envoyer cet email via Gmail SMTP.</p>"
-            f"<p>Test UTC : {now:%Y-%m-%d %H:%M:%S}</p>"
-        ),
-        f"Notifications opérationnelles. Test Railway UTC : {now:%Y-%m-%d %H:%M:%S}",
-    )
-    return {"status": "sent", "sent_at": now.isoformat()}
+    provider = email_provider()
+    provider_label = "Resend HTTPS" if provider == "resend" else "Gmail SMTP"
+    try:
+        await send_email(
+            recipient,
+            "✅ Test Flight Error Fare Watcher",
+            (
+                "<h2>✅ Notifications opérationnelles</h2>"
+                f"<p>Railway a réussi à envoyer cet email via {provider_label}.</p>"
+                f"<p>Test UTC : {now:%Y-%m-%d %H:%M:%S}</p>"
+            ),
+            f"Notifications opérationnelles via {provider_label}. "
+            f"Test Railway UTC : {now:%Y-%m-%d %H:%M:%S}",
+        )
+    except EmailDeliveryError as exc:
+        logger.warning(
+            "Échec du test de notification",
+            extra={"extra_fields": {"provider": provider, "reason": str(exc)}},
+        )
+        return {"status": "failed", "detail": str(exc), "provider": provider}
+    except Exception:
+        logger.exception(
+            "Échec inattendu du test de notification",
+            extra={"extra_fields": {"provider": provider}},
+        )
+        return {
+            "status": "failed",
+            "detail": "Échec inattendu de l'envoi ; consulter les logs Railway",
+            "provider": provider,
+        }
+    return {"status": "sent", "sent_at": now.isoformat(), "provider": provider}
 
 
 @router.get("/api/export", dependencies=[Depends(require_admin)])

@@ -46,9 +46,15 @@
   <div class="muted" style="margin-top:.5rem;">
     Alertes : cycle toutes les {{ monitoring_interval_minutes }} min ·
     Duffel live {% if duffel_ready %}<span class="badge ok">configuré</span>{% else %}<span class="badge error">absent</span>{% endif %} ·
-    Gmail {% if smtp_ready %}<span class="badge ok">configuré</span>{% else %}<span class="badge error">absent</span>{% endif %}
+    Email
+    {% if email_provider == "resend" %}<span class="badge ok">Resend HTTPS configuré</span>
+    {% elif email_provider == "gmail_smtp" %}<span class="badge error">Gmail SMTP uniquement</span>
+    {% else %}<span class="badge error">absent</span>{% endif %}
     <button id="test-email-btn" onclick="testEmail()" style="margin-left:.5rem; background:#374151; padding:.3rem .65rem;">Tester l'email</button>
   </div>
+  {% if email_provider == "gmail_smtp" %}
+  <div class="muted" style="margin-top:.35rem;">Railway Trial bloque SMTP : ajoute RESEND_API_KEY pour activer l'envoi HTTPS.</div>
+  {% endif %}
   {% endif %}
 </div>
 
